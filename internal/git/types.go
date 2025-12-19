@@ -10,6 +10,9 @@ type Commit struct {
 	AuthorDate  time.Time
 	Subject     string
 	FileChanges []FileChange
+	IsMerge     bool   // True if this is a merge commit
+	PRNumber    int    // PR number if extracted from merge message
+	MergeBranch string // Branch that was merged
 }
 
 // Author represents commit author info

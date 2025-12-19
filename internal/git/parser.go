@@ -4,9 +4,17 @@ import (
 	"bufio"
 	"context"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+)
+
+var (
+	// Match "Merge pull request #123 from user/branch"
+	prNumberRegex = regexp.MustCompile(`[Mm]erge pull request #(\d+)`)
+	// Match "Merge branch 'feature'" or "Merge branch 'feature' into 'main'"
+	mergeBranchRegex = regexp.MustCompile(`[Mm]erge (?:pull request #\d+ from |branch '?)([^'"\s]+)`)
 )
 
 const (
@@ -55,7 +63,8 @@ func (p *Parser) EstimateCommitCount(ctx context.Context, since, until time.Time
 func (p *Parser) Parse(ctx context.Context, since, until time.Time,
 	onProgress func(ScanProgress), onCommit func(*Commit)) error {
 
-	format := "COMMIT_START%n%H%n%h%n%an%n%ae%n%aI%n%s%nCOMMIT_END"
+	// %P = parent hashes (space-separated), used to detect merge commits
+	format := "COMMIT_START%n%H%n%h%n%an%n%ae%n%aI%n%P%n%s%nCOMMIT_END"
 
 	args := []string{
 		"log",
@@ -172,7 +181,20 @@ func parseCommitLine(c *Commit, lineNum int, line string) {
 	case 4:
 		c.AuthorDate, _ = time.Parse(time.RFC3339, line)
 	case 5:
+		// Parent hashes - merge commits have 2+ parents
+		parents := strings.Fields(line)
+		c.IsMerge = len(parents) >= 2
+	case 6:
 		c.Subject = line
+		// Extract PR number and branch from merge commit message
+		if c.IsMerge {
+			if matches := prNumberRegex.FindStringSubmatch(line); len(matches) >= 2 {
+				c.PRNumber, _ = strconv.Atoi(matches[1])
+			}
+			if matches := mergeBranchRegex.FindStringSubmatch(line); len(matches) >= 2 {
+				c.MergeBranch = matches[1]
+			}
+		}
 	}
 }
 

@@ -30,6 +30,11 @@ func NewAggregator(repoPath string, dateRange DateRange, tz *time.Location) *Agg
 func (a *Aggregator) ProcessCommit(c *git.Commit) {
 	a.repo.TotalCommits++
 
+	// Process merge commits for PR stats
+	if c.IsMerge {
+		a.processMergeCommit(c)
+	}
+
 	// Author stats
 	authorKey := c.Author.Email
 	author, ok := a.repo.Authors[authorKey]
@@ -478,4 +483,116 @@ func (r *Repository) ApplyAuthorMerges(merges map[string]string) {
 			}
 		}
 	}
+}
+
+// processMergeCommit processes a merge commit for PR statistics
+func (a *Aggregator) processMergeCommit(c *git.Commit) {
+	prStats := a.repo.PRStats
+	prStats.TotalMerges++
+
+	// Track daily merges
+	dateKey := c.AuthorDate.In(a.timezone).Format("2006-01-02")
+	prStats.DailyMerges[dateKey]++
+
+	// Calculate totals for this merge
+	additions := 0
+	deletions := 0
+	for _, fc := range c.FileChanges {
+		if !fc.IsBinary {
+			additions += fc.Additions
+			deletions += fc.Deletions
+		}
+	}
+
+	// Track author stats
+	authorKey := c.Author.Email
+	authorStats, ok := prStats.MergesByAuthor[authorKey]
+	if !ok {
+		authorStats = &PRAuthorStats{
+			Name:      c.Author.Name,
+			Email:     c.Author.Email,
+			PRNumbers: make([]int, 0),
+		}
+		prStats.MergesByAuthor[authorKey] = authorStats
+	}
+	authorStats.MergeCount++
+	authorStats.TotalChanges += additions + deletions
+	if c.PRNumber > 0 {
+		authorStats.PRNumbers = append(authorStats.PRNumbers, c.PRNumber)
+	}
+
+	// Track PR info
+	if c.PRNumber > 0 {
+		prStats.TotalPRs++
+	}
+
+	prInfo := &PRInfo{
+		PRNumber:      c.PRNumber,
+		MergedBy:      c.Author.Name,
+		MergedByEmail: c.Author.Email,
+		MergedAt:      c.AuthorDate,
+		Branch:        c.MergeBranch,
+		Subject:       c.Subject,
+		Additions:     additions,
+		Deletions:     deletions,
+		FilesCount:    len(c.FileChanges),
+	}
+	prStats.PRList = append(prStats.PRList, prInfo)
+}
+
+// GetPRLeaderboard returns authors sorted by merge count
+func (r *Repository) GetPRLeaderboard(sortBy string, ascending bool) []*PRAuthorStats {
+	authors := make([]*PRAuthorStats, 0, len(r.PRStats.MergesByAuthor))
+	for _, a := range r.PRStats.MergesByAuthor {
+		authors = append(authors, a)
+	}
+
+	sort.Slice(authors, func(i, j int) bool {
+		var cmp bool
+		switch sortBy {
+		case "name":
+			cmp = authors[i].Name < authors[j].Name
+		case "merges":
+			cmp = authors[i].MergeCount < authors[j].MergeCount
+		case "changes":
+			cmp = authors[i].TotalChanges < authors[j].TotalChanges
+		default:
+			cmp = authors[i].MergeCount < authors[j].MergeCount
+		}
+		if ascending {
+			return cmp
+		}
+		return !cmp
+	})
+
+	return authors
+}
+
+// GetPRList returns PRs sorted by date or size
+func (r *Repository) GetPRList(sortBy string, ascending bool, limit int) []*PRInfo {
+	prs := make([]*PRInfo, len(r.PRStats.PRList))
+	copy(prs, r.PRStats.PRList)
+
+	sort.Slice(prs, func(i, j int) bool {
+		var cmp bool
+		switch sortBy {
+		case "date":
+			cmp = prs[i].MergedAt.Before(prs[j].MergedAt)
+		case "size":
+			cmp = (prs[i].Additions + prs[i].Deletions) < (prs[j].Additions + prs[j].Deletions)
+		case "files":
+			cmp = prs[i].FilesCount < prs[j].FilesCount
+		default:
+			cmp = prs[i].MergedAt.Before(prs[j].MergedAt)
+		}
+		if ascending {
+			return cmp
+		}
+		return !cmp
+	})
+
+	if limit > 0 && limit < len(prs) {
+		return prs[:limit]
+	}
+	return prs
 }

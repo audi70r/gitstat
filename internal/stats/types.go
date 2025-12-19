@@ -37,6 +37,9 @@ type Repository struct {
 
 	// Codebase info
 	CodebaseSize int // Total lines in current codebase
+
+	// Pull Request / Merge statistics
+	PRStats *PRStatistics
 }
 
 // NewRepository creates a new Repository stats container
@@ -48,6 +51,7 @@ func NewRepository(path string, dateRange DateRange) *Repository {
 		FileStats:     make(map[string]*FileStats),
 		DirStats:      make(map[string]*DirStats),
 		DailyActivity: make(map[string]int),
+		PRStats:       NewPRStatistics(),
 	}
 }
 
@@ -150,6 +154,46 @@ type CodebaseStats struct {
 	FilesDeleted      int
 	CodebaseSize      int     // Total lines in current codebase
 	RefactoredPercent float64 // Percentage of codebase touched
+}
+
+// PRStatistics holds pull request / merge commit statistics
+type PRStatistics struct {
+	TotalMerges    int
+	TotalPRs       int // PRs with identifiable PR numbers
+	MergesByAuthor map[string]*PRAuthorStats
+	PRList         []*PRInfo
+	DailyMerges    map[string]int // "2024-01-15" -> count
+}
+
+// NewPRStatistics creates a new PRStatistics
+func NewPRStatistics() *PRStatistics {
+	return &PRStatistics{
+		MergesByAuthor: make(map[string]*PRAuthorStats),
+		PRList:         make([]*PRInfo, 0),
+		DailyMerges:    make(map[string]int),
+	}
+}
+
+// PRAuthorStats holds PR statistics per author
+type PRAuthorStats struct {
+	Name         string
+	Email        string
+	MergeCount   int   // Number of merges performed
+	TotalChanges int   // Total lines changed across all PRs
+	PRNumbers    []int // PR numbers merged by this author
+}
+
+// PRInfo holds information about a single PR/merge
+type PRInfo struct {
+	PRNumber      int
+	MergedBy      string // Author name
+	MergedByEmail string
+	MergedAt      time.Time
+	Branch        string
+	Subject       string
+	Additions     int
+	Deletions     int
+	FilesCount    int
 }
 
 // GetDirectory returns the top-level directory of a file path

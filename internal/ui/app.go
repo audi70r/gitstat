@@ -231,6 +231,7 @@ type MainView struct {
 	filesView       *views.FilesView
 	hotspotsView    *views.HotspotsView
 	ownershipView   *views.OwnershipView
+	prView          *views.PullRequestsView
 	authorsView     *views.AuthorsView
 
 	currentView string
@@ -276,7 +277,8 @@ func (m *MainView) setupLayout() {
 		{"Top Files", '5'},
 		{"Hotspots", '6'},
 		{"Ownership", '7'},
-		{"Authors", '8'},
+		{"Pull Requests", '8'},
+		{"Authors", '9'},
 	}
 
 	for _, item := range menuItems {
@@ -298,6 +300,7 @@ func (m *MainView) setupLayout() {
 	m.filesView = views.NewFilesView()
 	m.hotspotsView = views.NewHotspotsView()
 	m.ownershipView = views.NewOwnershipView()
+	m.prView = views.NewPullRequestsView()
 	m.authorsView = views.NewAuthorsView(m.onMerge)
 
 	// Add views to pages
@@ -308,6 +311,7 @@ func (m *MainView) setupLayout() {
 	m.viewPages.AddPage("Top Files", m.filesView.Root(), true, false)
 	m.viewPages.AddPage("Hotspots", m.hotspotsView.Root(), true, false)
 	m.viewPages.AddPage("Ownership", m.ownershipView.Root(), true, false)
+	m.viewPages.AddPage("Pull Requests", m.prView.Root(), true, false)
 	m.viewPages.AddPage("Authors", m.authorsView.Root(), true, false)
 
 	m.currentView = "Leaderboard"
@@ -363,6 +367,12 @@ func (m *MainView) handleInput(event *tcell.EventKey) *tcell.EventKey {
 	case 'r':
 		m.reverseSortOrder()
 		return nil
+	case 't', 'T':
+		if m.currentView == "Pull Requests" {
+			m.prView.ToggleView()
+			m.prView.Refresh(m.repoStats)
+		}
+		return nil
 	case '?':
 		m.showHelp()
 		return nil
@@ -383,6 +393,8 @@ func (m *MainView) toggleFocus() {
 			m.app.SetFocus(m.hotspotsView.GetFocusable())
 		case "Ownership":
 			m.app.SetFocus(m.ownershipView.GetFocusable())
+		case "Pull Requests":
+			m.app.SetFocus(m.prView.GetFocusable())
 		case "Authors":
 			m.app.SetFocus(m.authorsView.GetFocusable())
 		}
@@ -405,6 +417,9 @@ func (m *MainView) cycleSortColumn() {
 	case "Ownership":
 		m.ownershipView.CycleSortColumn()
 		m.ownershipView.Refresh(m.repoStats)
+	case "Pull Requests":
+		m.prView.CycleSortColumn()
+		m.prView.Refresh(m.repoStats)
 	}
 }
 
@@ -422,6 +437,9 @@ func (m *MainView) reverseSortOrder() {
 	case "Ownership":
 		m.ownershipView.ReverseSortOrder()
 		m.ownershipView.Refresh(m.repoStats)
+	case "Pull Requests":
+		m.prView.ReverseSortOrder()
+		m.prView.Refresh(m.repoStats)
 	}
 }
 
@@ -444,6 +462,8 @@ func (m *MainView) updateStatusBar() {
 	switch m.currentView {
 	case "Leaderboard", "Top Files", "Hotspots", "Ownership":
 		viewControls = "[yellow]s[-] Sort  [yellow]r[-] Reverse  "
+	case "Pull Requests":
+		viewControls = "[yellow]t[-] Toggle View  [yellow]s[-] Sort  [yellow]r[-] Reverse  "
 	case "Authors":
 		viewControls = "[yellow]Space[-] Select  [yellow]m[-] Merge  [yellow]a[-] Apply  [yellow]c[-] Clear  "
 	default:
@@ -474,6 +494,7 @@ func (m *MainView) SetData(repoStats *stats.Repository, cfg *config.Config) {
 	m.filesView.Refresh(repoStats)
 	m.hotspotsView.Refresh(repoStats)
 	m.ownershipView.Refresh(repoStats)
+	m.prView.Refresh(repoStats)
 	m.authorsView.Refresh(repoStats)
 }
 
