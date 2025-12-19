@@ -25,6 +25,9 @@
 ### Work Hours Heatmap
 ![Work Hours](screens/Workhours.png)`
 
+### Ownership View
+![Work Hours](screens/Ownership.png)`
+
 
 ## Installation
 
